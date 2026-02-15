@@ -5,7 +5,8 @@ const multer = require("multer");
 // Obtener todas las programaciones
 exports.getAll = async (req, res) => {
     try {
-        const programaciones = await Programacion.getAll();
+        const { fecha_inicial, fecha_final } = req.query;
+        const programaciones = await Programacion.getAll(fecha_inicial, fecha_final);
         res.json(programaciones);
     } catch (error) {
         res.status(400).json({ message: "Error al obtener programaciones", error: error.message });

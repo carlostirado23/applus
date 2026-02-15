@@ -2,11 +2,17 @@ const pool = require("../../config/config");
 
 const Programacion = {
     // Obtener todas las programaciones
-    getAll: async () => {
-        const result = await pool.query(
-            `SELECT id, numero_os, asignado_a, fecha_estimada_resolucion, nic, nombre, direccion, barrio, municipio, formulario, creado_por, insertar, validacion, fecha_creacion, fecha_actualizacion
-             FROM programacion.programaciones`,
-        );
+    getAll: async (fecha_inicial, fecha_final) => {
+        let query = `
+        SELECT id, numero_os, asignado_a, fecha_estimada_resolucion, nic, nombre, direccion, barrio, municipio, formulario, creado_por, insertar, validacion, fecha_creacion, fecha_actualizacion, estado
+        FROM programacion.programaciones
+    `;
+        const params = [];
+        if (fecha_inicial && fecha_final) {
+            query += " WHERE fecha_creacion BETWEEN $1 AND $2";
+            params.push(fecha_inicial, fecha_final);
+        }
+        const result = await pool.query(query, params);
         return result.rows;
     },
 
