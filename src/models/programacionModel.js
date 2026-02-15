@@ -55,9 +55,12 @@ const Programacion = {
         return result.rows[0];
     },
 
-    publicar: async function(id) {
-        // Ajusta según tu ORM o consulta SQL
-        return await this.update({ estado: 'publicado' }, { where: { id } });
+    publicar: async function (id) {
+        const result = await pool.query(
+            "UPDATE programacion.programaciones SET estado = 'publicado' WHERE id = $1 RETURNING *",
+            [id],
+        );
+        return result.rows[0];
     },
 };
 
