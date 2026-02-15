@@ -119,3 +119,38 @@ exports.create = async (req, res) => {
         res.status(400).json({ message: "Error al crear programación", error: error.message });
     }
 };
+
+
+exports.uploadExcel = [
+    upload.single("file"),
+    async (req, res) => {
+        try {
+            // ...existing code...
+            for (const prog of programaciones) {
+                const data = { ...prog, creado_por: creador, estado: 'precargado' }; // <--- aquí
+                const inserted = await Programacion.create(data);
+                resultados.push(inserted);
+            }
+            // ...existing code...
+        } catch (error) {
+            // ...existing code...
+        }
+    }
+];
+
+exports.publicar = async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: "No se enviaron programaciones para publicar" });
+        }
+        const resultados = [];
+        for (const id of ids) {
+            const actualizado = await Programacion.publicar(id); 
+            resultados.push(actualizado);
+        }
+        res.json({ message: "Programaciones publicadas correctamente", resultados });
+    } catch (error) {
+        res.status(500).json({ message: "Error al publicar programaciones", error: error.message });
+    }
+};

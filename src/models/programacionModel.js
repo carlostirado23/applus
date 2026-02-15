@@ -54,6 +54,11 @@ const Programacion = {
         );
         return result.rows[0];
     },
+
+    publicar: async function(id) {
+        // Ajusta según tu ORM o consulta SQL
+        return await this.update({ estado: 'publicado' }, { where: { id } });
+    },
 };
 
 module.exports = Programacion;
