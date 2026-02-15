@@ -63,7 +63,7 @@ const Programacion = {
 
     publicar: async function (id) {
         const result = await pool.query(
-            "UPDATE programacion.programaciones SET validacion = 'publicado' WHERE id = $1 RETURNING *",
+            "UPDATE programacion.programaciones SET validacion = 'PUBLICADO' WHERE id = $1 RETURNING *",
             [id],
         );
         return result.rows[0];
