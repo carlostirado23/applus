@@ -122,22 +122,6 @@ exports.create = async (req, res) => {
 };
 
 
-exports.uploadExcel = [
-    upload.single("file"),
-    async (req, res) => {
-        try {
-            // ...existing code...
-            for (const prog of programaciones) {
-                const data = { ...prog, creado_por: creador, estado: 'precargado' }; // <--- aquí
-                const inserted = await Programacion.create(data);
-                resultados.push(inserted);
-            }
-            // ...existing code...
-        } catch (error) {
-            // ...existing code...
-        }
-    }
-];
 
 exports.publicar = async (req, res) => {
     try {
