@@ -14,41 +14,45 @@ exports.getAll = async (req, res) => {
 
 // Descargar plantilla Excel
 exports.descargarPlantilla = async (req, res) => {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Programaciones");
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Programaciones");
 
-    worksheet.columns = [
-        { header: "SERVICEORDER", key: "numero_os", width: 20 },
-        { header: "ASIGNADO_A", key: "asignado_a", width: 20 },
-        { header: "F_EST_RESOL", key: "fecha_estimada_resolucion", width: 20 },
-        { header: "NIC", key: "nic", width: 15 },
-        { header: "NOMBRE", key: "nombre", width: 25 },
-        { header: "DIRECCIÓN", key: "direccion", width: 30 },
-        { header: "BARRIO", key: "barrio", width: 20 },
-        { header: "MUNICIPIO", key: "municipio", width: 20 },
-    ];
+        worksheet.columns = [
+            { header: "SERVICEORDER", key: "numero_os", width: 20 },
+            { header: "ASIGNADO_A", key: "asignado_a", width: 20 },
+            { header: "F_EST_RESOL", key: "fecha_estimada_resolucion", width: 20 },
+            { header: "NIC", key: "nic", width: 15 },
+            { header: "NOMBRE", key: "nombre", width: 25 },
+            { header: "DIRECCIÓN", key: "direccion", width: 30 },
+            { header: "BARRIO", key: "barrio", width: 20 },
+            { header: "MUNICIPIO", key: "municipio", width: 20 },
+        ];
 
-    worksheet.getRow(1).eachCell(cell => {
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF0070C0' }
-        };
-        cell.alignment = { vertical: 'middle', horizontal: 'center' };
-    });
+        worksheet.getRow(1).eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+            cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FF0070C0" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
 
-    res.setHeader(
-        "Content-Type",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader(
-        "Content-Disposition",
-        "attachment; filename=plantilla_programaciones.xlsx"
-    );
+        // Generar el archivo en un buffer
+        const buffer = await workbook.xlsx.writeBuffer();
+        const mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        const base64 = buffer.toString("base64");
+        const dataUrl = `data:${mimeType};base64,${base64}`;
 
-    await workbook.xlsx.write(res);
-    res.end();
+        res.json({
+            fileName: "plantilla_programaciones.xlsx",
+            mimeType,
+            dataUrl,
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Error al generar la plantilla", error: error.message });
+    }
 };
 
 // Configuración de multer para archivos en memoria
