@@ -4,7 +4,7 @@ const Programacion = {
     // Obtener todas las programaciones
     getAll: async (fecha_inicial, fecha_final) => {
         let query = `
-        SELECT id, numero_os, asignado_a, fecha_estimada_resolucion, nic, nombre, direccion, barrio, municipio, formulario, creado_por, insertar, validacion, fecha_creacion, fecha_actualizacion, estado
+        SELECT id, numero_os, asignado_a, fecha_estimada_resolucion, nic, nombre, direccion, barrio, municipio, formulario, creado_por, insertar, validacion, fecha_creacion, fecha_actualizacion
         FROM programacion.programaciones
     `;
         const params = [];
