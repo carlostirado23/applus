@@ -131,7 +131,7 @@ export function normalizar(entrada, creado_por, contexto = "") {
 export function construirWhere(filtros = {}) {
     const where = {};
     const campoFecha = filtros.campo_fecha || "fecha_creacion";
-    if (!["fecha_creacion", "fecha_publicacion", "fecha_estimada_resolucion", "fecha_actualizacion"].includes(campoFecha)) {
+    if (!["fecha_creacion", "fecha_publicacion", "fecha_estimada_resolucion", "fecha_ejecucion", "fecha_actualizacion"].includes(campoFecha)) {
         throw badRequest("campo_fecha inválido");
     }
     Object.assign(where, rangoFecha(campoFecha, filtros.fecha_inicial, filtros.fecha_final));
@@ -456,11 +456,15 @@ const Programacion = {
 
     /**
      * Reporte de cumplimiento agrupado por técnico o municipio.
-     * Filtra OS publicadas por fecha_estimada_resolucion (fecha_inicial/fecha_final, YYYY-MM-DD).
+     * Filtra OS publicadas por rango (fecha_inicial/fecha_final, YYYY-MM-DD) sobre `campo_fecha`:
+     * fecha_estimada_resolucion (por defecto), fecha_publicacion o fecha_ejecucion.
      */
-    async reporte({ fecha_inicial, fecha_final, agrupar = "tecnico", tecnico_id, municipio } = {}) {
+    async reporte({ fecha_inicial, fecha_final, campo_fecha = "fecha_estimada_resolucion", agrupar = "tecnico", tecnico_id, municipio } = {}) {
         if (!["tecnico", "municipio"].includes(agrupar)) throw badRequest("agrupar debe ser tecnico o municipio");
-        const where = construirWhere({ fecha_inicial, fecha_final, campo_fecha: "fecha_estimada_resolucion", validacion: "PUBLICADO", tecnico_id, municipio });
+        if (!["fecha_estimada_resolucion", "fecha_publicacion", "fecha_ejecucion"].includes(campo_fecha)) {
+            throw badRequest("campo_fecha debe ser fecha_estimada_resolucion, fecha_publicacion o fecha_ejecucion");
+        }
+        const where = construirWhere({ fecha_inicial, fecha_final, campo_fecha, validacion: "PUBLICADO", tecnico_id, municipio });
         const filas = await prisma.programacion.findMany({
             where,
             select: { tecnico_id: true, municipio: true, estado_ejecucion: true, tecnico: { select: { nombre: true, usuario: true } } },
@@ -490,7 +494,7 @@ const Programacion = {
         for (const f of filas) totales[f.estado_ejecucion]++;
         totales.cumplimiento = totales.total ? Math.round((totales.EJECUTADA / totales.total) * 1000) / 10 : 0;
 
-        return { agrupar, fecha_inicial: fecha_inicial || null, fecha_final: fecha_final || null, totales, detalle };
+        return { agrupar, campo_fecha, fecha_inicial: fecha_inicial || null, fecha_final: fecha_final || null, totales, detalle };
     },
 
     // ───────── técnico (app móvil) ─────────
