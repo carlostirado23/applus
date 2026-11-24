@@ -98,7 +98,7 @@ Ambas URLs se copian del botón **Connect** del proyecto en Neon. Nunca subas `.
 | --- | --- |
 | `npm run dev` | Servidor local con recarga automática (nodemon). |
 | `npm start` | Servidor local sin recarga. |
-| `npm run db:generate` | Regenera el cliente Prisma tras cambiar `schema.prisma`. |
+| `npm run db:generate` | Regenera el cliente Prisma tras cambiar `schema.prisma` y lo convierte a JavaScript puro (`scripts/generate-prisma.mjs`). Vercel no rastrea imports `.ts`, por eso el paso extra. |
 | `npm run db:migrate` | Crea y aplica una migración en desarrollo (`prisma migrate dev`). |
 | `npm run db:deploy` | Aplica migraciones pendientes en producción (`prisma migrate deploy`). |
 | `npm run db:status` | Muestra el estado de las migraciones. |
@@ -149,7 +149,7 @@ Todas las respuestas de error son JSON: `{ "message": "...", "detalles"?: ... }`
 1. Importa el repositorio en Vercel. El `vercel.json` reenvía todas las rutas a `api/index.js`, que exporta la app Express.
 2. Configura en el proyecto las variables `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `JWT_SECRET` y `NODE_ENV=production`.
 3. La versión de Node la fija `engines.node` (`26.x`) en `package.json`.
-4. El cliente Prisma se genera en `npm install` gracias al script `postinstall`.
+4. El cliente Prisma se genera en `npm install` gracias al script `postinstall`. Por eso `prisma` va en `dependencies` y no en `devDependencies`: con `NODE_ENV=production` npm no instala las de desarrollo.
 5. Las migraciones **no** se aplican automáticamente. Antes de desplegar cambios de esquema ejecuta `npm run db:deploy` desde tu máquina (o en un paso de build) apuntando a la base de producción.
 
 ## Mantenimiento

@@ -2,12 +2,14 @@
 // La URL de conexión NO va aquí: la lee Prisma CLI desde prisma.config.js
 // y la app desde config/config.js (adaptador Neon).
 
+// Tras generar, scripts/generate-prisma.mjs convierte los .ts a .js
+// (Vercel no rastrea imports .ts). Por eso importFileExtension = "js".
 generator client {
   provider            = "prisma-client"
   output              = "../src/generated/prisma"
   runtime             = "nodejs"
   moduleFormat        = "esm"
-  importFileExtension = "ts"
+  importFileExtension = "js"
 }
 
 datasource db {

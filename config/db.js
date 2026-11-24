@@ -1,7 +1,7 @@
 // Cliente Prisma único para toda la app.
 // Usa el adaptador de Neon (HTTP/WebSocket) sobre la conexión POOLED de DATABASE_URL.
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { PrismaClient } from "../src/generated/prisma/client.ts";
+import { PrismaClient } from "../src/generated/prisma/client.js";
 import { env } from "./env.js";
 
 const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
