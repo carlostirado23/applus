@@ -1,6 +1,6 @@
 // Esquema de base de datos de Applus Backend.
 // La URL de conexión NO va aquí: la lee Prisma CLI desde prisma.config.js
-// y la app desde config/config.js (adaptador Neon).
+// y la app desde config/db.js (adaptador Neon).
 
 // Tras generar, scripts/generate-prisma.mjs convierte los .ts a .js
 // (Vercel no rastrea imports .ts). Por eso importFileExtension = "js".
@@ -19,14 +19,33 @@ datasource db {
 
 // ───────────────────────── seguridad ─────────────────────────
 
+// ADMIN: todo (incluye usuarios). SUPERVISOR: programaciones, resultados y reportes.
+// TECNICO: solo la app móvil (ve sus OS publicadas).
+enum Rol {
+  ADMIN
+  SUPERVISOR
+  TECNICO
+
+  @@schema("seguridad")
+}
+
 model Usuario {
   id             Int      @id @default(autoincrement())
   nombre         String   @db.VarChar(150)
   email          String   @unique @db.VarChar(150)
   usuario        String   @unique @db.VarChar(80)
   password       String   @db.VarChar(255) // hash bcrypt
+  rol            Rol      @default(TECNICO)
+  activo         Boolean  @default(true)
+  // Datos del técnico (opcionales para ADMIN/SUPERVISOR)
+  cedula         String?  @unique @db.VarChar(20)
+  telefono       String?  @db.VarChar(30)
+  municipio      String?  @db.VarChar(150) // zona de trabajo
   fecha_creacion DateTime @default(now()) @db.Timestamptz(6)
 
+  programaciones Programacion[]
+
+  @@index([rol, activo])
   @@map("usuarios")
   @@schema("seguridad")
 }
@@ -40,10 +59,22 @@ enum EstadoValidacion {
   @@schema("programacion")
 }
 
+// Resultado de la visita, cargado por el área administrativa (Excel o panel)
+enum EstadoEjecucion {
+  SIN_RESULTADO
+  EJECUTADA
+  NO_EJECUTADA
+  REPROGRAMADA
+
+  @@schema("programacion")
+}
+
 model Programacion {
   id                        Int              @id @default(autoincrement())
   numero_os                 String           @db.VarChar(50) // SERVICEORDER
-  asignado_a                String?          @db.VarChar(150)
+  asignado_a                String?          @db.VarChar(150) // texto tal como llega en el Excel
+  tecnico_id                Int? // usuario con rol TECNICO al que se cruzó asignado_a
+  tecnico                   Usuario?         @relation(fields: [tecnico_id], references: [id], onDelete: SetNull)
   fecha_estimada_resolucion DateTime?        @db.Date
   nic                       String?          @db.VarChar(50)
   nombre                    String?          @db.VarChar(200)
@@ -56,12 +87,24 @@ model Programacion {
   // false -> numero_os ya existía (duplicado / histórico)
   insertar                  Boolean          @default(true)
   validacion                EstadoValidacion @default(PENDIENTE)
+  fecha_publicacion         DateTime?        @db.Timestamptz(6)
+  publicado_por             String?          @db.VarChar(80)
+  fecha_vista               DateTime?        @db.Timestamptz(6) // cuándo la vio el técnico en la app
+  // Resultado de la visita
+  estado_ejecucion          EstadoEjecucion  @default(SIN_RESULTADO)
+  fecha_ejecucion           DateTime?        @db.Date
+  observaciones             String?          @db.VarChar(1000)
+  resultado_por             String?          @db.VarChar(80)
+  fecha_resultado           DateTime?        @db.Timestamptz(6)
   fecha_creacion            DateTime         @default(now()) @db.Timestamptz(6)
   fecha_actualizacion       DateTime         @updatedAt @db.Timestamptz(6)
 
   @@index([numero_os])
   @@index([fecha_creacion])
   @@index([validacion])
+  @@index([tecnico_id, validacion])
+  @@index([estado_ejecucion])
+  @@index([fecha_estimada_resolucion])
   @@map("programaciones")
   @@schema("programacion")
 }

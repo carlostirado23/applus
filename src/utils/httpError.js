@@ -10,5 +10,6 @@ export class HttpError extends Error {
 
 export const badRequest = (msg, detalles) => new HttpError(400, msg, detalles);
 export const unauthorized = (msg = "No autorizado") => new HttpError(401, msg);
+export const forbidden = (msg = "No tienes permiso para esta acción") => new HttpError(403, msg);
 export const notFound = (msg = "Recurso no encontrado") => new HttpError(404, msg);
 export const conflict = (msg) => new HttpError(409, msg);

@@ -7,6 +7,8 @@ import authMiddleware from "./src/middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./src/middleware/errorHandler.js";
 import authRoutes from "./src/routes/auth.route.js";
 import programacionesRoutes from "./src/routes/programaciones.route.js";
+import tecnicoRoutes from "./src/routes/tecnico.route.js";
+import usuariosRoutes from "./src/routes/usuarios.route.js";
 
 const app = express();
 
@@ -27,7 +29,9 @@ app.get("/api/health", async (req, res) => {
 
 // Rutas de negocio
 app.use("/api/auth", authRoutes);
+app.use("/api/usuarios", authMiddleware, usuariosRoutes);
 app.use("/api/programaciones", authMiddleware, programacionesRoutes);
+app.use("/api/mis-programaciones", authMiddleware, tecnicoRoutes);
 
 // 404 y errores (siempre al final)
 app.use(notFoundHandler);
