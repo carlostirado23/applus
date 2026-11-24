@@ -61,7 +61,7 @@ applus/
 
 ### Regla de negocio: duplicados
 
-Al crear programaciones (individual o por Excel) se verifica si el `numero_os` ya existe en la base de datos o apareció antes en el mismo archivo. El registro **se inserta de todas formas**, pero con `insertar = false`. Así se conserva el histórico y el front puede distinguir la carga nueva de la repetida. La carga masiva se hace en **una sola transacción**: si una fila es inválida, no se inserta ninguna.
+Al crear programaciones (individual o por Excel) se verifica si el `numero_os` ya existe en la base de datos o apareció antes en el mismo archivo. El registro **se inserta de todas formas**, pero con `insertar = false`. Así se conserva el histórico y el front puede distinguir la carga nueva de la repetida. **Las duplicadas no se pueden publicar**: el endpoint de publicar las omite y lo informa. La carga masiva se hace en **una sola transacción**: si una fila es inválida, no se inserta ninguna.
 
 ## Puesta en marcha
 
@@ -88,6 +88,7 @@ npm run dev            # http://localhost:8080
 | `JWT_SECRET` | Clave para firmar los tokens. Usa un valor largo y aleatorio. |
 | `JWT_EXPIRES_IN` | Vigencia del token. Por defecto `1d`. |
 | `PORT` | Puerto local. Por defecto `8080`. |
+| `UTC_OFFSET_MINUTES` | Desfase horario de la operación. Por defecto `-300` (Colombia). |
 | `NODE_ENV` | `development` o `production`. |
 
 Ambas URLs se copian del botón **Connect** del proyecto en Neon. Nunca subas `.env` al repositorio; solo se versiona `.env.example`.
@@ -126,11 +127,11 @@ Base: `/api`. Todas las rutas de programaciones requieren el header `Authorizati
 
 | Método | Ruta | Descripción |
 | --- | --- | --- |
-| GET | `/api/programaciones` | Lista todas. Filtros opcionales `?fecha_inicial=YYYY-MM-DD&fecha_final=YYYY-MM-DD` sobre `fecha_creacion`. |
+| GET | `/api/programaciones` | Lista todas. Filtros opcionales `?fecha_inicial=...&fecha_final=...` sobre `fecha_creacion`. Aceptan `YYYY-MM-DD` (día completo en hora Colombia, ver `UTC_OFFSET_MINUTES`) o un instante ISO exacto como `2026-11-24T05:00:00.000Z`. |
 | POST | `/api/programaciones` | Crea una programación. Body con los campos del modelo; `numero_os` es obligatorio. `creado_por` se toma del token. |
 | GET | `/api/programaciones/descargar-plantilla` | Devuelve la plantilla Excel como `{ fileName, mimeType, dataUrl }`. Con `?formato=archivo` descarga el `.xlsx` directamente. |
 | POST | `/api/programaciones/cargar-excel` | `multipart/form-data` con el archivo en el campo `file` (máx. 10 MB, solo `.xlsx`). Responde `201 { message, total, nuevas, duplicados, resultados }`. |
-| POST | `/api/programaciones/publicar` | Body `{ ids: [1, 2, 3] }`. Cambia `validacion` a `PUBLICADO` y devuelve las filas actualizadas. |
+| POST | `/api/programaciones/publicar` | Body `{ ids: [1, 2, 3] }`. Cambia `validacion` a `PUBLICADO` y responde `{ message, total, omitidas, resultados }`. Las OS duplicadas (`insertar = false`), los ids inexistentes y las ya publicadas se omiten y se listan en `omitidas` con su motivo. Si no se pudo publicar ninguna responde `400`. |
 
 ### Plantilla Excel
 

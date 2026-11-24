@@ -1,4 +1,5 @@
 import prisma from "../../config/db.js";
+import { env } from "../../config/env.js";
 import { badRequest } from "../utils/httpError.js";
 
 // Columnas de texto que acepta una programación (además de fecha_estimada_resolucion)
@@ -37,6 +38,23 @@ export function aFecha(valor) {
     return Number.isNaN(d.getTime()) ? null : d;
 }
 
+const SOLO_DIA = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Límite de un filtro de fechas.
+ * - "YYYY-MM-DD": día completo en hora local (UTC_OFFSET_MINUTES). `fin` = true -> 23:59:59.999 de ese día.
+ * - Instante ISO (p. ej. "2026-11-24T05:00:00.000Z"): se respeta exacto, sin redondear.
+ * Devuelve Date o null si no se puede interpretar.
+ */
+export function limiteFiltro(valor, fin = false) {
+    const s = valor == null ? "" : String(valor).trim();
+    if (!s) return null;
+    const dia = s.match(SOLO_DIA);
+    if (!dia) return aFecha(s);
+    const medianocheLocalEnUtc = Date.UTC(+dia[1], +dia[2] - 1, +dia[3]) - env.UTC_OFFSET_MINUTES * 60_000;
+    return new Date(fin ? medianocheLocalEnUtc + 86_400_000 - 1 : medianocheLocalEnUtc);
+}
+
 /** Deja los datos listos para Prisma. Lanza 400 si falta numero_os o la fecha es inválida. */
 export function normalizar(entrada, creado_por, contexto = "") {
     const data = {};
@@ -64,23 +82,23 @@ export function normalizar(entrada, creado_por, contexto = "") {
 // ───────────────────────── acceso a datos ─────────────────────────
 
 const Programacion = {
-    /** Lista programaciones, opcionalmente filtradas por rango de fecha_creacion. */
+    /**
+     * Lista programaciones, opcionalmente filtradas por rango de fecha_creacion.
+     * fecha_inicial / fecha_final aceptan "YYYY-MM-DD" (día completo en hora local)
+     * o un instante ISO exacto. Ver limiteFiltro().
+     */
     async getAll({ fecha_inicial, fecha_final } = {}) {
         const where = {};
         if (fecha_inicial || fecha_final) {
-            const desde = aFecha(fecha_inicial);
-            const hasta = aFecha(fecha_final);
+            const desde = limiteFiltro(fecha_inicial, false);
+            const hasta = limiteFiltro(fecha_final, true);
             if ((fecha_inicial && !desde) || (fecha_final && !hasta)) {
-                throw badRequest("fecha_inicial y fecha_final deben tener formato YYYY-MM-DD");
+                throw badRequest("fecha_inicial y fecha_final deben ser YYYY-MM-DD o una fecha ISO válida");
             }
+            if (desde && hasta && desde > hasta) throw badRequest("fecha_inicial no puede ser mayor que fecha_final");
             where.fecha_creacion = {};
             if (desde) where.fecha_creacion.gte = desde;
-            if (hasta) {
-                // Incluir todo el día final
-                const fin = new Date(hasta);
-                fin.setUTCHours(23, 59, 59, 999);
-                where.fecha_creacion.lte = fin;
-            }
+            if (hasta) where.fecha_creacion.lte = hasta;
         }
         return prisma.programacion.findMany({ where, orderBy: { fecha_creacion: "desc" } });
     },
@@ -117,13 +135,36 @@ const Programacion = {
         });
     },
 
-    /** Marca como PUBLICADO las programaciones indicadas y devuelve las filas actualizadas. */
+    /**
+     * Marca como PUBLICADO las programaciones indicadas.
+     * Regla de negocio: las OS duplicadas (insertar = false) NO se publican; se devuelven en `omitidas`.
+     * También se omiten los ids inexistentes y los ya publicados.
+     */
     async publicar(ids) {
-        const [, filas] = await prisma.$transaction([
-            prisma.programacion.updateMany({ where: { id: { in: ids } }, data: { validacion: "PUBLICADO" } }),
-            prisma.programacion.findMany({ where: { id: { in: ids } }, orderBy: { id: "asc" } }),
-        ]);
-        return filas;
+        return prisma.$transaction(async (tx) => {
+            const filas = await tx.programacion.findMany({
+                where: { id: { in: ids } },
+                select: { id: true, numero_os: true, insertar: true, validacion: true },
+            });
+            const porId = new Map(filas.map((f) => [f.id, f]));
+
+            const omitidas = [];
+            const publicables = [];
+            for (const id of ids) {
+                const fila = porId.get(id);
+                if (!fila) omitidas.push({ id, numero_os: null, motivo: "No existe" });
+                else if (!fila.insertar) omitidas.push({ id, numero_os: fila.numero_os, motivo: "OS duplicada, no se puede publicar" });
+                else if (fila.validacion === "PUBLICADO") omitidas.push({ id, numero_os: fila.numero_os, motivo: "Ya estaba publicada" });
+                else publicables.push(id);
+            }
+
+            let resultados = [];
+            if (publicables.length) {
+                await tx.programacion.updateMany({ where: { id: { in: publicables } }, data: { validacion: "PUBLICADO" } });
+                resultados = await tx.programacion.findMany({ where: { id: { in: publicables } }, orderBy: { id: "asc" } });
+            }
+            return { resultados, omitidas };
+        });
     },
 };
 

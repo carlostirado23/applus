@@ -130,6 +130,16 @@ export async function publicar(req, res) {
     const idsNum = ids.map(Number);
     if (idsNum.some((n) => !Number.isInteger(n) || n <= 0)) throw badRequest("ids debe ser un arreglo de enteros positivos");
 
-    const resultados = await Programacion.publicar(idsNum);
-    res.json({ message: "Programaciones publicadas correctamente", total: resultados.length, resultados });
+    const { resultados, omitidas } = await Programacion.publicar([...new Set(idsNum)]);
+
+    if (resultados.length === 0) {
+        throw badRequest("Ninguna de las programaciones seleccionadas se puede publicar", omitidas);
+    }
+
+    const message =
+        omitidas.length === 0
+            ? "Programaciones publicadas correctamente"
+            : `Se publicaron ${resultados.length}; ${omitidas.length} omitida(s) (duplicadas, inexistentes o ya publicadas)`;
+
+    res.json({ message, total: resultados.length, omitidas, resultados });
 }
