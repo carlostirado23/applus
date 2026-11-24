@@ -1,34 +1,43 @@
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
+import express from "express";
+import cors from "cors";
 
-const authMiddleware = require("./src/middleware/auth");
-const authRoutes = require("./src/routes/auth.route");
-const programacionesRoutes = require("./src/routes/programaciones.route");
+import { env } from "./config/env.js";
+import prisma from "./config/db.js";
+import authMiddleware from "./src/middleware/auth.js";
+import { errorHandler, notFoundHandler } from "./src/middleware/errorHandler.js";
+import authRoutes from "./src/routes/auth.route.js";
+import programacionesRoutes from "./src/routes/programaciones.route.js";
 
 const app = express();
-const PORT = process.env.PORT || 8080;
 
-// Middlewares
+// Middlewares globales
 app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
-// Rutas
+// Rutas informativas
+app.get("/", (req, res) => {
+    res.json({ name: "Applus Backend", status: "ok", docs: "ver README.md" });
+});
+
+app.get("/api/health", async (req, res) => {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", db: "ok", timestamp: new Date().toISOString() });
+});
+
+// Rutas de negocio
 app.use("/api/auth", authRoutes);
 app.use("/api/programaciones", authMiddleware, programacionesRoutes);
 
-// Ruta raíz
-app.get("/", (req, res) => {
-    res.send("Applus Backend funcionando 🚀");
-});
+// 404 y errores (siempre al final)
+app.use(notFoundHandler);
+app.use(errorHandler);
 
-// Levantar servidor SOLO en local
-if (process.env.NODE_ENV !== "production") {
-    app.listen(PORT, () => {
-        console.log(`Servidor corriendo en http://localhost:${PORT}`);
+// Servidor local. En Vercel la función importa `app` y no se escucha en un puerto.
+if (!env.IS_VERCEL) {
+    app.listen(env.PORT, () => {
+        console.log(`Applus Backend corriendo en http://localhost:${env.PORT} (${env.NODE_ENV})`);
     });
 }
 
-// 🔹 Export necesario para Vercel
-module.exports = app;
+export default app;

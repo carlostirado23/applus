@@ -1,27 +1,62 @@
 {
     "name": "applus",
-    "version": "1.0.0",
-    "main": "index.js",
+    "version": "2.0.0",
+    "description": "Backend REST de Applus: gestión de programaciones de órdenes de servicio (carga por Excel, validación y publicación) con autenticación JWT. Node.js + Express 5 + Prisma 7 + PostgreSQL (Neon).",
+    "main": "main.js",
+    "type": "module",
+    "private": true,
+    "engines": {
+        "node": "26.x"
+    },
     "scripts": {
         "dev": "nodemon main.js",
         "start": "node main.js",
+        "postinstall": "prisma generate",
+        "db:generate": "prisma generate",
+        "db:migrate": "prisma migrate dev",
+        "db:deploy": "prisma migrate deploy",
+        "db:status": "prisma migrate status",
+        "db:studio": "prisma studio",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
-    "keywords": [],
+    "keywords": [
+        "applus",
+        "programaciones",
+        "express",
+        "prisma",
+        "neon",
+        "postgresql"
+    ],
     "author": "Carlos Tirado",
     "license": "ISC",
-    "description": "",
     "dependencies": {
+        "@prisma/adapter-neon": "^7.10.1",
+        "@prisma/client": "^7.10.1",
         "bcryptjs": "^3.0.3",
         "cors": "^2.8.6",
-        "dotenv": "^17.3.1",
+        "dotenv": "^18.0.10",
         "exceljs": "^4.4.0",
-        "express": "^5.2.1",
+        "express": "^5.3.0",
         "jsonwebtoken": "^9.0.3",
-        "multer": "^2.0.2",
-        "pg": "^8.18.0"
+        "multer": "^2.5.0"
     },
     "devDependencies": {
-        "nodemon": "^3.1.11"
+        "nodemon": "^3.1.14",
+        "prisma": "^7.10.1"
+    },
+    "overrides": {
+        "exceljs": {
+            "uuid": "^11.1.1"
+        },
+        "prisma": {
+            "effect": "^3.22.1"
+        },
+        "nodemon": {
+            "minimatch": "^11.0.1"
+        }
+    },
+    "allowScripts": {
+        "@prisma/engines@7.10.1": true,
+        "prisma@7.10.1": true
     }
 }

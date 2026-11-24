@@ -1,46 +1,45 @@
-const pool = require("../../config/config");
-const bcrypt = require("bcryptjs");
+import bcrypt from "bcryptjs";
+import prisma from "../../config/db.js";
+import { badRequest, conflict, unauthorized } from "../utils/httpError.js";
 
-// Modelo de usuario
+// Campos que se devuelven al cliente (nunca el hash de la contraseña)
+const camposPublicos = { id: true, nombre: true, email: true, usuario: true, fecha_creacion: true };
+
 const Usuario = {
-    registrar: async ({ nombre, email, usuario, password }) => {
-        // Verificar si ya existe el usuario
-        const existe = await pool.query("SELECT * FROM seguridad.usuarios WHERE usuario = $1 OR email = $2", [
-            usuario,
-            email,
-        ]);
-        if (existe.rows.length > 0) throw new Error("El usuario o email ya está registrado");
+    async registrar({ nombre, email, usuario, password }) {
+        if (!nombre || !email || !usuario || !password) {
+            throw badRequest("nombre, email, usuario y password son obligatorios");
+        }
+        if (String(password).length < 8) {
+            throw badRequest("La contraseña debe tener al menos 8 caracteres");
+        }
 
-        // Encriptar password
+        const existe = await prisma.usuario.findFirst({
+            where: { OR: [{ usuario }, { email }] },
+            select: { id: true },
+        });
+        if (existe) throw conflict("El usuario o email ya está registrado");
+
         const hash = await bcrypt.hash(password, 10);
 
-        // Insertar usuario
-        const result = await pool.query(
-            "INSERT INTO seguridad.usuarios (nombre, email, usuario, password) VALUES ($1, $2, $3, $4) RETURNING id, nombre, email, usuario, fecha_creacion",
-            [nombre, email, usuario, hash],
-        );
-        return result.rows[0];
+        return prisma.usuario.create({
+            data: { nombre, email: email.toLowerCase().trim(), usuario: usuario.trim(), password: hash },
+            select: camposPublicos,
+        });
     },
 
-    login: async ({ usuario, password }) => {
-        // Buscar usuario por nombre de usuario
-        const result = await pool.query("SELECT * FROM seguridad.usuarios WHERE usuario = $1", [usuario]);
-        if (result.rows.length === 0) throw new Error("Usuario o password incorrectos");
+    async login({ usuario, password }) {
+        if (!usuario || !password) throw badRequest("usuario y password son obligatorios");
 
-        const user = result.rows[0];
+        const user = await prisma.usuario.findUnique({ where: { usuario } });
+        if (!user) throw unauthorized("Usuario o password incorrectos");
 
-        // Comparar contraseñas
         const valido = await bcrypt.compare(password, user.password);
-        if (!valido) throw new Error("Usuario o password incorrectos");
+        if (!valido) throw unauthorized("Usuario o password incorrectos");
 
-        return {
-            id: user.id,
-            nombre: user.nombre,
-            email: user.email,
-            usuario: user.usuario,
-            fecha_creacion: user.fecha_creacion,
-        };
+        const { password: _omitido, ...publico } = user;
+        return publico;
     },
 };
 
-module.exports = Usuario;
+export default Usuario;

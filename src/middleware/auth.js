@@ -1,19 +1,20 @@
-const jwt = require("jsonwebtoken");
+import jwt from "jsonwebtoken";
+import { env } from "../../config/env.js";
+import { unauthorized } from "../utils/httpError.js";
 
-function authMiddleware(req, res, next) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: "Token requerido" });
+// Exige un header "Authorization: Bearer <token>" y deja el payload en req.user
+export default function authMiddleware(req, res, next) {
+    const authHeader = req.headers.authorization || "";
+    const [esquema, token] = authHeader.split(" ");
 
-    const token = authHeader.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Token inválido" });
+    if (esquema !== "Bearer" || !token) {
+        return next(unauthorized("Token requerido. Usa el header Authorization: Bearer <token>"));
+    }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded; // Puedes acceder a req.user en tus controladores
+        req.user = jwt.verify(token, env.JWT_SECRET);
         next();
-    } catch (err) {
-        res.status(401).json({ error: "Token inválido o expirado" });
+    } catch {
+        next(unauthorized("Token inválido o expirado"));
     }
 }
-
-module.exports = authMiddleware;

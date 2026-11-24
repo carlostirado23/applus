@@ -1,141 +1,135 @@
-const Programacion = require("../models/programacionModel");
-const ExcelJS = require("exceljs");
-const multer = require("multer");
+import ExcelJS from "exceljs";
+import multer from "multer";
+import Programacion, { aTexto, normalizar } from "../models/programacionModel.js";
+import { badRequest } from "../utils/httpError.js";
 
-// Obtener todas las programaciones
-exports.getAll = async (req, res) => {
-    try {
-        const { fecha_inicial, fecha_final } = req.query;
-        const programaciones = await Programacion.getAll(fecha_inicial, fecha_final);
-        res.json(programaciones);
-    } catch (error) {
-        res.status(400).json({ message: "Error al obtener programaciones", error: error.message });
-    }
-};
-
-// Descargar plantilla Excel
-exports.descargarPlantilla = async (req, res) => {
-    try {
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet("Programaciones");
-
-        worksheet.columns = [
-            { header: "SERVICEORDER", key: "numero_os", width: 20 },
-            { header: "ASIGNADO_A", key: "asignado_a", width: 20 },
-            { header: "F_EST_RESOL", key: "fecha_estimada_resolucion", width: 20 },
-            { header: "NIC", key: "nic", width: 15 },
-            { header: "NOMBRE", key: "nombre", width: 25 },
-            { header: "DIRECCIÓN", key: "direccion", width: 30 },
-            { header: "BARRIO", key: "barrio", width: 20 },
-            { header: "MUNICIPIO", key: "municipio", width: 20 },
-        ];
-
-        worksheet.getRow(1).eachCell((cell) => {
-            cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-            cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FF0070C0" },
-            };
-            cell.alignment = { vertical: "middle", horizontal: "center" };
-        });
-
-        // Generar el archivo en un buffer
-        const buffer = await workbook.xlsx.writeBuffer();
-        const mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        const base64 = buffer.toString("base64");
-        const dataUrl = `data:${mimeType};base64,${base64}`;
-
-        res.json({
-            fileName: "plantilla_programaciones.xlsx",
-            mimeType,
-            dataUrl,
-        });
-    } catch (error) {
-        res.status(500).json({ message: "Error al generar la plantilla", error: error.message });
-    }
-};
-
-// Configuración de multer para archivos en memoria
-const upload = multer({ storage: multer.memoryStorage() });
-
-// Subir y procesar Excel
-exports.uploadExcel = [
-    upload.single("file"),
-    async (req, res) => {
-        try {
-            const workbook = new ExcelJS.Workbook();
-            await workbook.xlsx.load(req.file.buffer);
-            const worksheet = workbook.worksheets[0];
-
-            const programaciones = [];
-            worksheet.eachRow((row, rowNumber) => {
-                if (rowNumber === 1) return; // Saltar encabezado
-                const [
-                    numero_os,
-                    asignado_a,
-                    fecha_estimada_resolucion,
-                    nic,
-                    nombre,
-                    direccion,
-                    barrio,
-                    municipio
-                ] = row.values.slice(1);
-
-                programaciones.push({
-                    numero_os,
-                    asignado_a,
-                    fecha_estimada_resolucion,
-                    nic,
-                    nombre,
-                    direccion,
-                    barrio,
-                    municipio
-                });
-            });
-
-            const creador = req.user.usuario;
-            const resultados = [];
-            for (const prog of programaciones) {
-                const data = { ...prog, creado_por: creador };
-                const inserted = await Programacion.create(data);
-                resultados.push(inserted);
-            }
-
-            res.json({ message: "Programaciones cargadas correctamente", resultados });
-        } catch (error) {
-            res.status(400).json({ message: "Error al procesar el archivo", error: error.message });
-        }
-    }
+// Columnas de la plantilla Excel: encabezado visible -> campo en BD
+const COLUMNAS = [
+    { header: "SERVICEORDER", key: "numero_os", width: 20 },
+    { header: "ASIGNADO_A", key: "asignado_a", width: 20 },
+    { header: "F_EST_RESOL", key: "fecha_estimada_resolucion", width: 20 },
+    { header: "NIC", key: "nic", width: 15 },
+    { header: "NOMBRE", key: "nombre", width: 25 },
+    { header: "DIRECCIÓN", key: "direccion", width: 30 },
+    { header: "BARRIO", key: "barrio", width: 20 },
+    { header: "MUNICIPIO", key: "municipio", width: 20 },
 ];
 
-// Crear una nueva programación individual
-exports.create = async (req, res) => {
-    try {
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+// Normaliza un encabezado para compararlo: mayúsculas, sin tildes ni espacios
+const claveHeader = (h) =>
+    String(h ?? "")
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .toUpperCase()
+        .replace(/\s+/g, "");
+
+// GET /api/programaciones?fecha_inicial=YYYY-MM-DD&fecha_final=YYYY-MM-DD
+export async function getAll(req, res) {
+    const { fecha_inicial, fecha_final } = req.query;
+    const programaciones = await Programacion.getAll({ fecha_inicial, fecha_final });
+    res.json(programaciones);
+}
+
+// GET /api/programaciones/descargar-plantilla
+export async function descargarPlantilla(req, res) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Programaciones");
+    worksheet.columns = COLUMNAS;
+
+    worksheet.getRow(1).eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0070C0" } };
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    // ?formato=archivo -> descarga directa del .xlsx; por defecto JSON con dataUrl (compatibilidad con el front)
+    if (req.query.formato === "archivo") {
+        res.setHeader("Content-Type", MIME_XLSX);
+        res.setHeader("Content-Disposition", 'attachment; filename="plantilla_programaciones.xlsx"');
+        return res.send(Buffer.from(buffer));
+    }
+
+    res.json({
+        fileName: "plantilla_programaciones.xlsx",
+        mimeType: MIME_XLSX,
+        dataUrl: `data:${MIME_XLSX};base64,${Buffer.from(buffer).toString("base64")}`,
+    });
+}
+
+// Multer: archivo en memoria, máximo 10 MB, solo .xlsx
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    fileFilter: (req, file, cb) => {
+        const esXlsx = file.mimetype === MIME_XLSX || /\.xlsx$/i.test(file.originalname);
+        cb(esXlsx ? null : badRequest("Solo se aceptan archivos .xlsx"), esXlsx);
+    },
+});
+
+// POST /api/programaciones/cargar-excel  (multipart/form-data, campo "file")
+export const uploadExcel = [
+    upload.single("file"),
+    async (req, res) => {
+        if (!req.file) throw badRequest('No se recibió ningún archivo. Envía el .xlsx en el campo "file"');
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) throw badRequest("El archivo no tiene hojas");
+
+        // Mapear columnas por nombre de encabezado; si no coincide ninguno, usar el orden de la plantilla
+        const encabezados = worksheet.getRow(1).values; // índice 1-based
+        const indicePorKey = {};
+        COLUMNAS.forEach((col, i) => {
+            const pos = encabezados.findIndex((h, idx) => idx > 0 && claveHeader(aTexto(h)) === claveHeader(col.header));
+            indicePorKey[col.key] = pos > 0 ? pos : i + 1;
+        });
+
         const creado_por = req.user.usuario;
-        const data = { ...req.body, creado_por };
-        const programacion = await Programacion.create(data);
-        res.status(201).json({ message: "Programación creada correctamente", programacion });
-    } catch (error) {
-        res.status(400).json({ message: "Error al crear programación", error: error.message });
-    }
-};
+        const filas = [];
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return; // encabezado
+            const crudo = {};
+            for (const col of COLUMNAS) crudo[col.key] = row.getCell(indicePorKey[col.key]).value;
+            // Saltar filas completamente vacías
+            if (Object.values(crudo).every((v) => aTexto(v) === null)) return;
+            filas.push(normalizar(crudo, creado_por, ` (fila ${rowNumber})`));
+        });
 
+        if (!filas.length) throw badRequest("El archivo no tiene filas con datos");
 
+        const resultados = await Programacion.createMany(filas);
+        const duplicados = resultados.filter((r) => !r.insertar).length;
 
-exports.publicar = async (req, res) => {
-    try {
-        const { ids } = req.body;
-        if (!Array.isArray(ids) || ids.length === 0) {
-            return res.status(400).json({ message: "No se enviaron programaciones para publicar" });
-        }
-        const resultados = [];
-        for (const id of ids) {
-            const actualizado = await Programacion.publicar(id); 
-            resultados.push(actualizado);
-        }
-        res.json({ message: "Programaciones publicadas correctamente", resultados });
-    } catch (error) {
-        res.status(500).json({ message: "Error al publicar programaciones", error: error.message });
-    }
-};
+        res.status(201).json({
+            message: "Programaciones cargadas correctamente",
+            total: resultados.length,
+            nuevas: resultados.length - duplicados,
+            duplicados,
+            resultados,
+        });
+    },
+];
+
+// POST /api/programaciones
+export async function create(req, res) {
+    const data = normalizar(req.body ?? {}, req.user.usuario);
+    const programacion = await Programacion.create(data);
+    res.status(201).json({ message: "Programación creada correctamente", programacion });
+}
+
+// POST /api/programaciones/publicar   body: { ids: [1, 2, 3] }
+export async function publicar(req, res) {
+    const { ids } = req.body ?? {};
+    if (!Array.isArray(ids) || ids.length === 0) throw badRequest("No se enviaron programaciones para publicar");
+
+    const idsNum = ids.map(Number);
+    if (idsNum.some((n) => !Number.isInteger(n) || n <= 0)) throw badRequest("ids debe ser un arreglo de enteros positivos");
+
+    const resultados = await Programacion.publicar(idsNum);
+    res.json({ message: "Programaciones publicadas correctamente", total: resultados.length, resultados });
+}

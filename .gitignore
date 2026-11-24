@@ -1,1 +1,18 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (solo se versiona .env.example)
 .env
+.env.*
+!.env.example
+
+# Cliente Prisma generado (se regenera con `npm run db:generate`)
+src/generated/
+
+# Vercel
+.vercel/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+*.log

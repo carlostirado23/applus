@@ -1,0 +1,65 @@
+// Esquema de base de datos de Applus Backend.
+// La URL de conexión NO va aquí: la lee Prisma CLI desde prisma.config.js
+// y la app desde config/config.js (adaptador Neon).
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  runtime             = "nodejs"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["seguridad", "programacion"]
+}
+
+// ───────────────────────── seguridad ─────────────────────────
+
+model Usuario {
+  id             Int      @id @default(autoincrement())
+  nombre         String   @db.VarChar(150)
+  email          String   @unique @db.VarChar(150)
+  usuario        String   @unique @db.VarChar(80)
+  password       String   @db.VarChar(255) // hash bcrypt
+  fecha_creacion DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("usuarios")
+  @@schema("seguridad")
+}
+
+// ───────────────────────── programacion ──────────────────────
+
+enum EstadoValidacion {
+  PENDIENTE
+  PUBLICADO
+
+  @@schema("programacion")
+}
+
+model Programacion {
+  id                        Int              @id @default(autoincrement())
+  numero_os                 String           @db.VarChar(50) // SERVICEORDER
+  asignado_a                String?          @db.VarChar(150)
+  fecha_estimada_resolucion DateTime?        @db.Date
+  nic                       String?          @db.VarChar(50)
+  nombre                    String?          @db.VarChar(200)
+  direccion                 String?          @db.VarChar(250)
+  barrio                    String?          @db.VarChar(150)
+  municipio                 String?          @db.VarChar(150)
+  formulario                String           @default("AFINIA") @db.VarChar(50)
+  creado_por                String           @db.VarChar(80) // usuario que cargó el registro
+  // true  -> primera vez que llega este numero_os
+  // false -> numero_os ya existía (duplicado / histórico)
+  insertar                  Boolean          @default(true)
+  validacion                EstadoValidacion @default(PENDIENTE)
+  fecha_creacion            DateTime         @default(now()) @db.Timestamptz(6)
+  fecha_actualizacion       DateTime         @updatedAt @db.Timestamptz(6)
+
+  @@index([numero_os])
+  @@index([fecha_creacion])
+  @@index([validacion])
+  @@map("programaciones")
+  @@schema("programacion")
+}
